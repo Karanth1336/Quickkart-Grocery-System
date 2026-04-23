@@ -39,7 +39,6 @@ PAYPAL_CONFIGURED = (
     len(PAYPAL_CLIENT_ID) > 20 and len(PAYPAL_CLIENT_SECRET) > 20
 )
 if PAYPAL_CONFIGURED:
-    
     paypalrestsdk.configure({
         "mode":          PAYPAL_MODE,
         "client_id":     PAYPAL_CLIENT_ID,
@@ -1545,13 +1544,15 @@ document.addEventListener('click',function(){{
     {% for p in items %}
     <div class="card">
       {% if loop.index <= 2 %}<div class="card-badge">BEST</div>{% endif %}
-      <div class="card-img-wrap">
-        <img src="{{ p.image }}" alt="{{ p.name }}"
-          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-        <span style="display:none;font-size:2.4rem;align-items:center;justify-content:center;width:100%;height:100%">&#127851;</span>
-      </div>
-      <div class="card-name">{{ p.name }}</div>
-      <div class="card-price">&#8377;{{ p.price }}</div>
+      <a href="/product/{{ p.id }}" style="display:block;text-decoration:none">
+        <div class="card-img-wrap">
+          <img src="{{ p.image }}" alt="{{ p.name }}"
+            onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+          <span style="display:none;font-size:2.4rem;align-items:center;justify-content:center;width:100%;height:100%">&#127851;</span>
+        </div>
+        <div class="card-name">{{ p.name }}</div>
+        <div class="card-price">&#8377;{{ p.price }}</div>
+      </a>
       {% if p.qty > 0 %}
       <div class="qty-ctrl" id="qc-{{ p.id }}">
         <button class="qty-btn" data-pid="{{ p.id }}" data-action="remove">&#8722;</button>
@@ -1625,6 +1626,394 @@ document.addEventListener('click', function(e) {
         flashes=get_flashes(), chat=CHAT_WIDGET,
         grouped=grouped, cat_tabs=cat_tabs, icons=CATEGORY_ICONS,
         cat=cat, q=q, cart_count=count)
+
+
+# ── PRODUCT DETAIL PAGE ──────────────────────────────────
+# Spec data keyed by product id — covers all 100 products
+_PRODUCT_SPECS = {
+    # Dairy & Eggs
+    1:  {"Weight":"1 L","Fat Content":"3.5%","Type":"Full Cream","Storage":"Refrigerate below 4°C","Shelf Life":"3 days","Brand":"Amul / Local Dairy"},
+    2:  {"Weight":"500 g","Fat Content":"80%","Type":"Table Butter","Storage":"Refrigerate below 4°C","Shelf Life":"6 months","Brand":"Amul"},
+    3:  {"Weight":"200 g","Type":"Fresh Paneer","Fat":"20 g per 100 g","Protein":"18 g per 100 g","Storage":"Refrigerate, consume within 2 days","Brand":"Local Fresh"},
+    4:  {"Weight":"400 g","Type":"Set Curd","Fat":"4%","Probiotic":"Yes","Storage":"Refrigerate","Shelf Life":"5 days","Brand":"Mother Dairy"},
+    5:  {"Count":"6 eggs","Type":"White / Brown","Storage":"Refrigerate","Shelf Life":"3 weeks","Source":"Free-range farm","Brand":"Nandini / Local"},
+    6:  {"Weight":"200 g","Slices":"10","Type":"Processed Cheese","Fat":"26%","Storage":"Refrigerate","Shelf Life":"6 months","Brand":"Amul"},
+    7:  {"Volume":"500 ml","Type":"Pure Desi Ghee","Fat":"99.7%","Source":"Cow milk","Storage":"Room temp / Refrigerate","Shelf Life":"12 months","Brand":"Patanjali"},
+    8:  {"Weight":"1 L","Fat Content":"0.5%","Type":"Skimmed Milk","Storage":"Refrigerate below 4°C","Shelf Life":"3 days","Brand":"Nestle / Local"},
+    # Fruits & Vegetables
+    9:  {"Weight":"1 kg","Variety":"Shimla / Royal Fuji","Origin":"Himachal Pradesh","Storage":"Refrigerate","Shelf Life":"2 weeks","Rich In":"Fibre, Vitamin C"},
+    10: {"Count":"6 pcs","Variety":"Robusta / Nendran","Origin":"Maharashtra","Storage":"Room temp","Shelf Life":"5 days","Rich In":"Potassium, Vitamin B6"},
+    11: {"Weight":"500 g","Variety":"Desi Tamatar","Origin":"Local farms","Storage":"Room temp","Shelf Life":"5 days","Rich In":"Lycopene, Vitamin C"},
+    12: {"Weight":"1 kg","Variety":"Nasik Onion","Origin":"Maharashtra","Storage":"Cool dry place","Shelf Life":"2 weeks","Rich In":"Quercetin"},
+    13: {"Weight":"1 kg","Variety":"Jyoti / Kufri","Origin":"UP / Punjab","Storage":"Cool dry place","Shelf Life":"3 weeks","Rich In":"Carbs, Potassium"},
+    14: {"Weight":"250 g","Type":"Fresh Palak","Origin":"Local farms","Storage":"Refrigerate","Shelf Life":"3 days","Rich In":"Iron, Vitamin K"},
+    15: {"Weight":"500 g","Type":"Orange Carrot","Origin":"Punjab","Storage":"Refrigerate","Shelf Life":"2 weeks","Rich In":"Beta-carotene"},
+    16: {"Weight":"500 g","Color":"Green","Origin":"Maharashtra","Storage":"Refrigerate","Shelf Life":"5 days","Rich In":"Vitamin C, B6"},
+    17: {"Weight":"1 kg","Variety":"Alphonso / Kesar","Origin":"Maharashtra / Gujarat","Storage":"Room temp until ripe","Shelf Life":"5 days","Rich In":"Vitamin A, C"},
+    18: {"Weight":"500 g","Variety":"Flame Seedless","Origin":"Nashik","Storage":"Refrigerate","Shelf Life":"5 days","Rich In":"Resveratrol, Vitamin C"},
+    # Staples & Grains
+    19: {"Weight":"5 kg","Type":"Long Grain Basmati","Grain Length":"8+ mm","Origin":"Punjab / Haryana","Shelf Life":"18 months","Brand":"India Gate / Daawat"},
+    20: {"Weight":"5 kg","Type":"Whole Wheat (Atta)","Protein":"12 g per 100 g","Fibre":"2.7 g per 100 g","Shelf Life":"6 months","Brand":"Aashirvaad / Pillsbury"},
+    21: {"Weight":"1 kg","Type":"Split Pigeon Pea (Arhar)","Protein":"22 g per 100 g","Cook Time":"20 min","Shelf Life":"12 months","Brand":"Tata Sampann"},
+    22: {"Weight":"1 kg","Type":"Split Green Gram","Protein":"24 g per 100 g","Cook Time":"15 min","Shelf Life":"12 months","Brand":"Tata Sampann"},
+    23: {"Weight":"1 kg","Type":"Split Bengal Gram","Protein":"20 g per 100 g","Cook Time":"25 min","Shelf Life":"12 months","Brand":"Tata Sampann"},
+    24: {"Weight":"500 g","Type":"Flattened Rice","Variety":"Thick / Thin","Shelf Life":"6 months","Usage":"Poha, snacks","Brand":"Local / Patanjali"},
+    25: {"Weight":"1 kg","Type":"Fine Rava / Sooji","Usage":"Upma, halwa, idli","Shelf Life":"6 months","Brand":"Aashirvaad"},
+    26: {"Weight":"500 g","Type":"Rolled Oats","Fibre":"10 g per 100 g","Protein":"13 g per 100 g","Shelf Life":"12 months","Brand":"Quaker / Saffola"},
+    # Oils & Condiments
+    27: {"Volume":"1 L","Type":"Refined Sunflower Oil","Smoke Point":"232°C","Fat":"100%","Shelf Life":"18 months","Brand":"Fortune / Saffola"},
+    28: {"Volume":"1 L","Type":"Kachi Ghani Mustard Oil","Smoke Point":"254°C","Fat":"100%","Shelf Life":"12 months","Brand":"Patanjali / Engine"},
+    29: {"Volume":"500 ml","Type":"Extra Virgin Olive Oil","Acidity":"<0.8%","Smoke Point":"190°C","Shelf Life":"24 months","Brand":"DiSano / Figaro"},
+    30: {"Weight":"1 kg","Type":"Iodised Table Salt","Sodium":"38 g per 100 g","Iodine":"15 ppm","Shelf Life":"Indefinite","Brand":"Tata Salt"},
+    31: {"Weight":"1 kg","Type":"Refined White Sugar","Calories":"400 kcal per 100 g","Shelf Life":"Indefinite","Brand":"Local / Uttam"},
+    32: {"Weight":"500 g","Type":"Tomato Ketchup","Tomato Content":"40%","Sugar":"20 g per 100 g","Shelf Life":"18 months","Brand":"Heinz / Kissan"},
+    33: {"Volume":"200 ml","Type":"Dark Soy Sauce","Sodium":"6 g per 100 g","Shelf Life":"24 months","Usage":"Stir-fry, fried rice","Brand":"Ching's Secret"},
+    34: {"Volume":"500 ml","Type":"White Vinegar","Acidity":"5%","Shelf Life":"Indefinite","Usage":"Cooking, pickling","Brand":"Borges / Local"},
+    # Snacks & Munchies
+    35: {"Weight":"100 g","Flavour":"Classic Salted","Calories":"536 kcal per 100 g","Fat":"35 g","Contains":"Potato, Sunflower Oil, Salt","Brand":"Lay's"},
+    36: {"Weight":"90 g","Flavour":"Masala Munch","Calories":"520 kcal per 100 g","Fat":"33 g","Contains":"Corn, Rice, Spices","Brand":"Kurkure"},
+    37: {"Weight":"200 g (approx)","Type":"Marie Tea Biscuits","Calories":"420 kcal per 100 g","Fat":"8 g","Shelf Life":"9 months","Brand":"Britannia / Parle"},
+    38: {"Weight":"800 g","Type":"Glucose Biscuits","Calories":"450 kcal per 100 g","Pack":"~350 biscuits","Shelf Life":"12 months","Brand":"Parle-G"},
+    39: {"Count":"12 packs","Flavour":"Masala","Cook Time":"2 minutes","Calories":"350 kcal per pack","Shelf Life":"12 months","Brand":"Maggi"},
+    40: {"Weight":"100 g (approx)","Flavour":"Salted","Type":"Microwave / Ready Popcorn","Calories":"480 kcal per 100 g","Shelf Life":"6 months","Brand":"Act II / SmartPop"},
+    41: {"Weight":"200 g","Type":"Raw Peanuts","Protein":"25 g per 100 g","Fat":"49 g per 100 g","Shelf Life":"6 months","Brand":"Local / Dukes"},
+    42: {"Weight":"200 g","Type":"Whole Cashews (W320)","Protein":"18 g per 100 g","Origin":"Goa / Kerala","Shelf Life":"6 months","Brand":"Happilo / Local"},
+    43: {"Weight":"200 g","Type":"California Almonds","Protein":"21 g per 100 g","Origin":"USA","Shelf Life":"12 months","Brand":"Happilo / Nutraj"},
+    # Beverages
+    44: {"Volume":"2 L","Type":"Carbonated Soft Drink","Flavour":"Cola","Sugar":"10.6 g per 100 ml","Calories":"42 kcal per 100 ml","Brand":"Coca-Cola"},
+    45: {"Volume":"2 L","Type":"Carbonated Soft Drink","Flavour":"Cola","Sugar":"11 g per 100 ml","Calories":"44 kcal per 100 ml","Brand":"PepsiCo"},
+    46: {"Volume":"1 L","Type":"100% Orange Juice","Vitamin C":"100% RDA per serving","Sugar":"Natural","Shelf Life":"9 months (unopened)","Brand":"Tropicana"},
+    47: {"Count":"25 bags","Type":"Green Tea","Caffeine":"30 mg per cup","Origin":"Darjeeling / Nilgiri","Shelf Life":"24 months","Brand":"Lipton / Tetley"},
+    48: {"Weight":"100 g","Type":"Instant Coffee","Caffeine":"~60 mg per cup","Shelf Life":"24 months","Serving":"~55 cups","Brand":"Nescafé Classic"},
+    49: {"Volume":"5 L","Type":"Packaged Drinking Water","TDS":"<150 ppm","pH":"6.5–8.5","BIS":"IS 14543","Brand":"Kinley / Bisleri"},
+    50: {"Volume":"250 ml","Type":"Energy Drink","Caffeine":"80 mg","Sugar":"27 g","Calories":"113 kcal","Taurine":"1000 mg","Brand":"Red Bull"},
+    51: {"Volume":"500 ml","Type":"Sweet Lassi","Fat":"3.5%","Sugar":"Added","Shelf Life":"3 days","Storage":"Refrigerate","Brand":"Amul / Local"},
+    # Bakery & Bread
+    52: {"Weight":"~400 g","Slices":"18-20","Type":"White Sandwich Bread","Shelf Life":"5 days","Preservative":"Yes","Brand":"Britannia / Harvest Gold"},
+    53: {"Weight":"~400 g","Slices":"18-20","Type":"Brown Bread","Wholemeal":"30%","Shelf Life":"5 days","Brand":"Britannia / Modern"},
+    54: {"Weight":"~400 g","Slices":"18-20","Type":"Multigrain Bread","Grains":"5+","Fibre":"Higher","Shelf Life":"5 days","Brand":"Bonn / Harvest Gold"},
+    55: {"Count":"8 pcs","Type":"Soft Pav / Dinner Rolls","Shelf Life":"3 days","Usage":"Pav bhaji, vada pav","Brand":"Local Bakery"},
+    56: {"Count":"2 pcs","Type":"Butter Croissant","Butter Content":"High","Shelf Life":"2 days","Storage":"Room temp","Brand":"Local Bakery"},
+    57: {"Count":"1 pc","Type":"Chocolate Muffin","Weight":"~100 g","Shelf Life":"3 days","Contains":"Cocoa, Chocolate chips","Brand":"Local Bakery"},
+    # Chocolates & Sweets
+    58: {"Weight":"50 g","Type":"Milk Chocolate","Cocoa":"26%","Sugar":"57 g per 100 g","Shelf Life":"12 months","Brand":"Cadbury Dairy Milk"},
+    59: {"Weight":"41.5 g","Type":"Wafer + Chocolate","Fingers":"4","Calories":"210 kcal","Shelf Life":"12 months","Brand":"Nestlé KitKat"},
+    60: {"Weight":"40 g","Type":"Caramel + Chocolate","Calories":"195 kcal","Shelf Life":"12 months","Brand":"Cadbury 5 Star"},
+    61: {"Weight":"23 g","Type":"Wafer + Chocolate","Calories":"115 kcal","Shelf Life":"12 months","Brand":"Nestlé Munch"},
+    62: {"Count":"4 pcs","Type":"Hazelnut Praline Chocolate","Weight":"50 g","Shelf Life":"12 months","Origin":"Italy","Brand":"Ferrero Rocher"},
+    63: {"Weight":"~120 g","Type":"Sandwich Cookie","Flavour":"Original Cream","Shelf Life":"12 months","Brand":"Mondelez Oreo"},
+    64: {"Weight":"500 g","Type":"Gulab Jamun (Canned)","Count":"~30 pcs","Shelf Life":"12 months","Storage":"Room temp unopened","Brand":"Haldiram's"},
+    # Spices & Masalas
+    65: {"Weight":"100 g","Type":"Haldi Powder","Curcumin":"3-5%","Origin":"Erode / Salem","Shelf Life":"24 months","Brand":"Everest / MDH"},
+    66: {"Weight":"100 g","Type":"Lal Mirch Powder","Heat Level":"Medium-Hot","Origin":"Rajasthan / AP","Shelf Life":"24 months","Brand":"Everest / MDH"},
+    67: {"Weight":"100 g","Type":"Jeera (Whole)","Origin":"Rajasthan / Gujarat","Shelf Life":"24 months","Usage":"Tadka, rice, curries","Brand":"Everest"},
+    68: {"Weight":"100 g","Type":"Dhania Powder","Origin":"Rajasthan / MP","Shelf Life":"24 months","Usage":"Gravies, marinades","Brand":"MDH / Catch"},
+    69: {"Weight":"100 g","Type":"Mixed Spice Blend","Contains":"Cardamom, Clove, Cinnamon, Pepper, Cumin","Shelf Life":"24 months","Brand":"MDH / Everest"},
+    70: {"Weight":"50 g","Type":"Chai Masala Blend","Contains":"Ginger, Cardamom, Clove, Pepper","Shelf Life":"18 months","Brand":"Wagh Bakri / MDH"},
+    71: {"Weight":"50 g","Type":"Black Pepper (Powder)","Origin":"Kerala / Karnataka","Piperine":"5-9%","Shelf Life":"24 months","Brand":"Everest"},
+    72: {"Weight":"20 g","Type":"Green Cardamom (Whole)","Origin":"Kerala / Guatemala","Shelf Life":"24 months","Usage":"Tea, biryani, desserts","Brand":"Local / Everest"},
+    # Frozen Foods
+    73: {"Weight":"500 g","Type":"Frozen Green Peas","IQF":"Yes","Blanched":"Yes","Shelf Life":"12 months (frozen)","Storage":"-18°C","Brand":"McCain / Local"},
+    74: {"Weight":"500 g","Type":"Frozen Sweet Corn","IQF":"Yes","Shelf Life":"12 months (frozen)","Storage":"-18°C","Brand":"McCain / Del Monte"},
+    75: {"Count":"8 pcs","Type":"Frozen Aloo Tikki","Weight":"~400 g","Cook":"Pan fry / Air fry","Shelf Life":"6 months (frozen)","Brand":"McCain"},
+    76: {"Count":"~15 pcs","Type":"Frozen Chicken Nuggets","Weight":"~300 g","Cook":"Deep fry / Air fry","Shelf Life":"3 months (frozen)","Brand":"Venky's / Suguna"},
+    77: {"Count":"5 pcs","Type":"Frozen Paratha (Lachha)","Weight":"~350 g","Cook":"Tawa 2 min","Shelf Life":"6 months (frozen)","Brand":"Kawan / ITC"},
+    78: {"Volume":"500 ml","Flavour":"Vanilla","Type":"Ice Cream","Fat":"10%","Storage":"-18°C","Shelf Life":"6 months","Brand":"Amul / Kwality Walls"},
+    79: {"Volume":"500 ml","Flavour":"Chocolate","Type":"Ice Cream","Fat":"10%","Storage":"-18°C","Shelf Life":"6 months","Brand":"Amul / Kwality Walls"},
+    # Personal Care
+    80: {"Weight":"100 g","Type":"Beauty Soap","Moisturiser":"1/4 cream","Skin Type":"All","Shelf Life":"36 months","Brand":"Dove"},
+    81: {"Weight":"125 g","Type":"Antibacterial Soap","Active":"Chloroxylenol 1.2%","Protection":"99.9% germs","Shelf Life":"36 months","Brand":"Dettol"},
+    82: {"Weight":"200 g","Type":"Fluoride Toothpaste","Fluoride":"1000 ppm","Variants":"Strong Teeth / Fresh Gel","Shelf Life":"30 months","Brand":"Colgate"},
+    83: {"Volume":"180 ml","Type":"Anti-Dandruff Shampoo","Active":"ZPT 1%","Hair Type":"All","Shelf Life":"36 months","Brand":"Head & Shoulders"},
+    84: {"Volume":"200 ml","Type":"Liquid Hand Wash","Active":"Chloroxylenol","Refillable":"No","Shelf Life":"24 months","Brand":"Dettol"},
+    85: {"Weight":"100 ml","Type":"Face Wash","Skin Type":"Normal / Oily","Key Ingredient":"Neem / Aloe Vera","Shelf Life":"24 months","Brand":"Himalaya / Garnier"},
+    # Household
+    86: {"Volume":"500 ml","Type":"Dish Wash Liquid","Active":"Surfactant blend","Lemon":"Yes","Shelf Life":"24 months","Brand":"Vim"},
+    87: {"Volume":"500 ml","Type":"Toilet Cleaner","Active":"HCl 9.5%","Kills":"99.9% germs","Shelf Life":"24 months","Brand":"Harpic"},
+    88: {"Volume":"500 ml","Type":"Glass & Surface Cleaner","Streak-Free":"Yes","Fragrance":"Fresh","Shelf Life":"24 months","Brand":"Colin"},
+    89: {"Weight":"1 kg","Type":"Washing Powder","Enzyme":"Yes","For":"Front & Top Load","Shelf Life":"24 months","Brand":"Surf Excel"},
+    90: {"Count":"2 blocks","Type":"Air Freshener Blocks","Fragrance":"Lavender / Floral","Duration":"30 days each","Brand":"Odonil"},
+    91: {"Count":"4 rolls","Type":"Toilet Tissue Roll","Ply":"2","Sheets":"~200 per roll","Shelf Life":"Indefinite","Brand":"Renova / Nice"},
+    92: {"Count":"30 bags","Type":"Garbage / Dustbin Bags","Size":"Medium (19\"×21\")","Thickness":"15 microns","Brand":"Ezee / Local"},
+    # Baby & Kids
+    93: {"Count":"56 pcs","Size":"Small (4-8 kg)","Type":"Baby Diapers","Wetness Indicator":"Yes","Absorption":"Up to 12 hrs","Brand":"Pampers"},
+    94: {"Count":"80 wipes","Type":"Baby Wipes","Fragrance":"Mild","Aloe Vera":"Yes","pH":"Balanced","Brand":"Pampers / Himalaya"},
+    95: {"Weight":"300 g","Type":"Infant Cereal","Flavour":"Wheat Apple","Stage":"Stage 1 (6m+)","Fortified":"Iron, Calcium, Vitamins","Brand":"Nestlé Cerelac"},
+    96: {"Weight":"200 g","Type":"Kids Glucose Biscuits","Age":"1 year+","No":"Artificial colours","Shelf Life":"6 months","Brand":"Britannia / Parle"},
+    97: {"Volume":"200 ml","Type":"Baby Oil","Key Ingredient":"Mineral Oil, Aloe Vera","Fragrance":"Mild","Shelf Life":"36 months","Brand":"Johnson's Baby"},
+    # Pet Supplies
+    98: {"Weight":"1 kg","Type":"Dry Dog Food","Life Stage":"Adult","Protein":"26%","Flavour":"Chicken & Rice","Shelf Life":"18 months","Brand":"Pedigree"},
+    99: {"Weight":"400 g","Type":"Dry Cat Food","Life Stage":"Adult","Protein":"30%","Flavour":"Tuna & Salmon","Shelf Life":"18 months","Brand":"Whiskas"},
+    100:{"Volume":"200 ml","Type":"Pet Shampoo","Coat":"All types","Active":"Tea Tree Oil","Shelf Life":"24 months","Brand":"Himalaya Pet"},
+}
+
+_PRODUCT_DESCRIPTIONS = {
+    "Dairy & Eggs": "A fresh, farm-sourced product refrigerated for quality. Best consumed before the expiry date printed on the pack.",
+    "Fruits & Vegetables": "Freshly sourced from Indian farms. Rich in natural vitamins, minerals, and fibre for a healthy diet.",
+    "Staples & Grains": "A pantry essential — naturally dried and packaged for long shelf life without preservatives.",
+    "Oils & Condiments": "Processed and sealed to retain freshness and flavour. Store in a cool, dry place away from sunlight.",
+    "Snacks & Munchies": "A popular Indian snack — conveniently packed and sealed for crunchiness. Best consumed soon after opening.",
+    "Beverages": "A refreshing ready-to-drink or brew-at-home beverage. Seal tightly after opening and refrigerate if required.",
+    "Bakery & Bread": "Freshly baked and soft. Best consumed within the shelf life indicated. Keep in a cool dry place.",
+    "Chocolates & Sweets": "Indulgent and delicious. Store below 25°C away from direct sunlight to retain texture.",
+    "Spices & Masalas": "Freshly ground and hygienically packed. Rich in natural aroma and authentic Indian flavour.",
+    "Frozen Foods": "Quick-frozen to preserve freshness and nutrients. Cook straight from frozen — no thawing required.",
+    "Personal Care": "Dermatologically tested formula. For external use only. Keep away from children.",
+    "Household": "Industrial-strength formula for home use. Keep away from children and pets. Read label before use.",
+    "Baby & Kids": "Specially formulated for sensitive baby skin. Paediatrician-tested and free from harsh chemicals.",
+    "Pet Supplies": "Nutritionally balanced and veterinarian-approved. Formulated for the specific needs of your pet.",
+}
+
+@app.route("/product/<int:pid>")
+@login_required
+def product_detail(pid):
+    db  = get_db()
+    p   = db.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
+    if not p:
+        flash("Product not found.", "error")
+        return redirect(url_for("home"))
+
+    cart     = session.get("cart", {})
+    qty      = cart.get(str(pid), 0)
+    specs    = _PRODUCT_SPECS.get(pid, {})
+    desc     = _PRODUCT_DESCRIPTIONS.get(p["category"], "A quality product delivered fresh to your door.")
+    cat_icon = CATEGORY_ICONS.get(p["category"], "🛍️")
+
+    # Related products — same category, exclude self, max 6
+    related_rows = db.execute(
+        "SELECT * FROM products WHERE category=? AND id!=? LIMIT 6", (p["category"], pid)
+    ).fetchall()
+    related = [{"id": r["id"], "name": r["name"], "price": r["price"],
+                "image": r["image"], "qty": cart.get(str(r["id"]), 0)} for r in related_rows]
+
+    specs_rows = "".join(
+        f'<tr><td style="padding:10px 14px;font-size:.82rem;color:var(--text3);'
+        f'font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap">{k}</td>'
+        f'<td style="padding:10px 14px;font-size:.82rem;color:var(--text);'
+        f'border-bottom:1px solid var(--border)">{v}</td></tr>'
+        for k, v in specs.items()
+    )
+
+    related_cards = "".join(f"""
+<div class="card">
+  <div class="card-img-wrap">
+    <img src="{r['image']}" alt="{r['name']}"
+      onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <span style="display:none;font-size:2.4rem;align-items:center;justify-content:center;width:100%;height:100%">&#127851;</span>
+  </div>
+  <a href="/product/{r['id']}" style="display:block">
+    <div class="card-name">{r['name']}</div>
+    <div class="card-price">&#8377;{r['price']}</div>
+  </a>
+  <div id="qc-{r['id']}">
+    {'<div class="qty-ctrl"><button class="qty-btn" data-pid="'+str(r["id"])+'" data-action="remove">&#8722;</button><span class="qty-num">'+str(r["qty"])+'</span><button class="qty-btn" data-pid="'+str(r["id"])+'" data-action="add">+</button></div>' if r["qty"] > 0 else '<button class="add-btn" data-pid="'+str(r["id"])+'" data-action="add">+ Add</button>'}
+  </div>
+</div>""" for r in related)
+
+    return render_template_string("""<!doctype html><html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ name }} - QuickKart</title>""" + CSS + """
+<style>
+.pd-wrap{max-width:1100px;margin:0 auto;padding:28px 24px}
+.pd-breadcrumb{font-size:.76rem;color:var(--text3);margin-bottom:20px;display:flex;
+  align-items:center;gap:6px;flex-wrap:wrap}
+.pd-breadcrumb a{color:var(--text3);transition:color .15s}.pd-breadcrumb a:hover{color:var(--accent)}
+.pd-breadcrumb .sep{color:var(--border2)}
+.pd-grid{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start}
+@media(max-width:720px){.pd-grid{grid-template-columns:1fr}}
+.pd-img-box{background:var(--surface2);border-radius:20px;display:flex;
+  align-items:center;justify-content:center;padding:40px;min-height:300px;
+  border:1px solid var(--border);position:relative}
+.pd-img-box img{width:210px;height:210px;object-fit:contain;
+  filter:drop-shadow(0 12px 32px rgba(0,0,0,.45));transition:transform .3s}
+.pd-img-box:hover img{transform:scale(1.06)}
+.pd-cat-badge{position:absolute;top:14px;left:14px;background:rgba(245,200,66,.12);
+  color:var(--accent);border:1px solid rgba(245,200,66,.25);border-radius:20px;
+  padding:4px 12px;font-size:.7rem;font-weight:700;letter-spacing:.5px}
+.pd-info{display:flex;flex-direction:column;gap:16px}
+.pd-name{font-family:'Playfair Display',serif;font-size:1.9rem;font-weight:900;
+  line-height:1.2;color:var(--text)}
+.pd-price-row{display:flex;align-items:center;gap:12px}
+.pd-price{font-size:2rem;font-weight:900;color:var(--accent)}
+.pd-desc{font-size:.87rem;color:var(--text2);line-height:1.7;
+  background:var(--surface);border-radius:12px;padding:14px 16px;
+  border:1px solid var(--border)}
+.pd-delivery-info{display:flex;gap:10px;flex-wrap:wrap}
+.pd-di{background:var(--surface2);border-radius:10px;padding:10px 14px;
+  display:flex;align-items:center;gap:8px;font-size:.78rem;font-weight:600;
+  color:var(--text2);border:1px solid var(--border);flex:1;min-width:120px}
+.pd-di .di-icon{font-size:1.1rem}
+.pd-qty-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.pd-qty-large .qty-ctrl{display:flex;align-items:center;gap:0;
+  background:rgba(245,200,66,.08);border-radius:12px;overflow:hidden;
+  border:1.5px solid var(--accent);width:140px}
+.pd-qty-large .qty-btn{width:44px;height:44px;font-size:1.15rem}
+.pd-qty-large .qty-num{flex:1;text-align:center;font-size:1.05rem}
+.pd-add-big{background:var(--accent);color:#0e0e0e;border:none;border-radius:12px;
+  padding:13px 32px;font-family:'DM Sans',sans-serif;font-weight:800;font-size:.95rem;
+  cursor:pointer;transition:all .18s;flex:1;max-width:220px}
+.pd-add-big:hover{background:var(--accent2);transform:translateY(-2px);
+  box-shadow:0 8px 24px rgba(245,200,66,.3)}
+.pd-specs-box{background:var(--card);border-radius:16px;border:1px solid var(--border);
+  overflow:hidden;margin-top:32px}
+.pd-specs-hd{padding:16px 20px;border-bottom:1px solid var(--border);
+  font-weight:800;font-size:.95rem;display:flex;align-items:center;gap:8px}
+.pd-specs-box table{width:100%;border-collapse:collapse}
+.pd-related{margin-top:40px}
+.pd-related-hd{font-family:'Playfair Display',serif;font-size:1.2rem;
+  font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+</style>
+</head><body>
+{{ nav|safe }}{{ flashes|safe }}
+<div class="pd-wrap">
+  <!-- Breadcrumb -->
+  <div class="pd-breadcrumb">
+    <a href="/">&#127968; Home</a><span class="sep">›</span>
+    <a href="/?cat={{ category|urlencode }}">{{ cat_icon }} {{ category }}</a>
+    <span class="sep">›</span>
+    <span style="color:var(--text)">{{ name }}</span>
+  </div>
+
+  <!-- Main product grid -->
+  <div class="pd-grid">
+    <!-- Image -->
+    <div class="pd-img-box">
+      <div class="pd-cat-badge">{{ cat_icon }} {{ category }}</div>
+      <img src="{{ image }}" alt="{{ name }}"
+        onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+      <span style="display:none;font-size:6rem;text-align:center">&#127851;</span>
+    </div>
+
+    <!-- Info -->
+    <div class="pd-info">
+      <div>
+        <div style="font-size:.72rem;font-weight:700;color:var(--text3);
+          text-transform:uppercase;letter-spacing:1.2px;margin-bottom:6px">
+          Product #{{ pid }}
+        </div>
+        <div class="pd-name">{{ name }}</div>
+      </div>
+      <div class="pd-price-row">
+        <div class="pd-price">&#8377;{{ price }}</div>
+        <div style="font-size:.78rem;color:var(--green);font-weight:700;
+          background:rgba(34,197,94,.1);border-radius:6px;padding:3px 9px">
+          &#10003; In Stock
+        </div>
+      </div>
+
+      <!-- Description -->
+      <div class="pd-desc">{{ desc }}</div>
+
+      <!-- Delivery chips -->
+      <div class="pd-delivery-info">
+        <div class="pd-di"><span class="di-icon">&#9889;</span>Delivery in 10-20 mins</div>
+        <div class="pd-di"><span class="di-icon">&#128230;</span>Free above &#8377;299</div>
+        <div class="pd-di"><span class="di-icon">&#128260;</span>Easy returns</div>
+      </div>
+
+      <!-- Add to cart -->
+      <div class="pd-qty-row pd-qty-large" id="pd-cart-ctrl">
+        {% if qty > 0 %}
+        <div class="qty-ctrl" id="qc-{{ pid }}">
+          <button class="qty-btn" data-pid="{{ pid }}" data-action="remove">&#8722;</button>
+          <span class="qty-num">{{ qty }}</span>
+          <button class="qty-btn" data-pid="{{ pid }}" data-action="add">+</button>
+        </div>
+        {% else %}
+        <button class="pd-add-big add-btn" data-pid="{{ pid }}" data-action="add">
+          &#43; Add to Cart
+        </button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Specifications table -->
+  {% if specs_rows %}
+  <div class="pd-specs-box">
+    <div class="pd-specs-hd">&#128203; Product Specifications</div>
+    <table>{{ specs_rows|safe }}</table>
+  </div>
+  {% endif %}
+
+  <!-- Related products -->
+  {% if related_cards %}
+  <div class="pd-related">
+    <div class="pd-related-hd">{{ cat_icon }} More from {{ category }}</div>
+    <div class="grid">{{ related_cards|safe }}</div>
+  </div>
+  {% endif %}
+</div>
+{{ chat|safe }}
+<script>
+function cartUpdate(pid, action, btn) {
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+  fetch('/cart/update', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({pid: pid, action: action})
+  })
+  .then(function(r) {
+    if (r.status === 401) { window.location = '/login'; return null; }
+    return r.json();
+  })
+  .then(function(data) {
+    if (!data) return;
+    var qty  = data.qty;
+    var pid_s = String(pid);
+    // Update related card controls
+    var wrap = document.getElementById('qc-' + pid);
+    if (wrap) {
+      if (qty > 0) {
+        wrap.className = 'qty-ctrl';
+        wrap.innerHTML =
+          '<button class="qty-btn" data-pid="' + pid + '" data-action="remove">&#8722;</button>' +
+          '<span class="qty-num">' + qty + '</span>' +
+          '<button class="qty-btn" data-pid="' + pid + '" data-action="add">+</button>';
+      } else {
+        wrap.className = '';
+        wrap.innerHTML = '<button class="add-btn" data-pid="' + pid + '" data-action="add">+ Add</button>';
+      }
+    }
+    // Update main product control if this is the detail product
+    if (pid === {{ pid }}) {
+      var main = document.getElementById('pd-cart-ctrl');
+      if (main) {
+        if (qty > 0) {
+          main.innerHTML = '<div class="qty-ctrl" id="qc-' + pid + '">' +
+            '<button class="qty-btn" data-pid="' + pid + '" data-action="remove">&#8722;</button>' +
+            '<span class="qty-num">' + qty + '</span>' +
+            '<button class="qty-btn" data-pid="' + pid + '" data-action="add">+</button>' +
+            '</div>';
+        } else {
+          main.innerHTML = '<button class="pd-add-big add-btn" data-pid="' + pid + '" data-action="add">&#43; Add to Cart</button>';
+        }
+      }
+    }
+    document.querySelectorAll('.cart-badge').forEach(function(b) {
+      b.textContent = data.cart_total || 0;
+    });
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+  })
+  .catch(function(err) {
+    console.error('Cart error:', err);
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+  });
+}
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('[data-pid][data-action]');
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  cartUpdate(parseInt(btn.getAttribute('data-pid'), 10), btn.getAttribute('data-action'), btn);
+});
+</script>
+</body></html>""",
+        nav=nav_html(), flashes=get_flashes(), chat=CHAT_WIDGET,
+        pid=pid, name=p["name"], price=p["price"], image=p["image"],
+        category=p["category"], cat_icon=cat_icon,
+        desc=desc, qty=qty, specs_rows=specs_rows, related_cards=related_cards)
 
 
 # ── CART add/remove ───────────────────────────────────────
